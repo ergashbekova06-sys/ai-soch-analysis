@@ -1,4 +1,4 @@
-# Streamlit AI Analyzer — исправленная версия с PDF-экспортом и цветными диаграммами
+# Streamlit AI Analyzer — исправленная безопасная версия
 
 import streamlit as st
 import pandas as pd
@@ -20,23 +20,25 @@ if uploaded:
 
     # --- 1. Поиск строк СОР/СОЧ ---
     mask = df_raw[0].astype(str).str.contains("СОР|СОЧ", case=False, na=False)
-    df = df_raw[mask].copy()
-    df = df.reset_index(drop=True)
+    df = df_raw[mask].copy().reset_index(drop=True)
 
     # --- 2. Безопасный выбор нужных колонок ---
-    desired = [c for c in [0,1,2,7,8] if c in df.columns]
-    df = df[desired]
-    df.columns = ["Работа","Выполнили","Не выполнили","% качества","% успеваемости"][:len(desired)]
+    desired_cols = [c for c in [0,1,2,7,8] if c in df.columns]
+    df = df[desired_cols]
 
-    # --- 3. Преобразование числовых колонок, убираем символ % ---
+    column_names = ["Работа","Выполнили","Не выполнили","% качества","% успеваемости"]
+    df.columns = column_names[:len(df.columns)]
+
+    # --- 3. Безопасное преобразование числовых колонок ---
     for col in ["Выполнили","Не выполнили","% качества","% успеваемости"]:
-        df[col] = df[col].astype(str).str.replace('%','').str.strip()
-        df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        if col in df.columns:
+            df[col] = df[col].astype(str).str.replace('%','').str.strip()
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
 
     st.subheader("📄 Обработанные данные")
     st.dataframe(df)
 
-    # --- 4. Цветная диаграмма качества ---
+    # --- 4. Диаграмма качества ---
     st.subheader("📈 Процент качества (цветная)")
 
     def color_quality(x):
@@ -47,16 +49,17 @@ if uploaded:
         else:
             return '#d62728'
 
-    colors_q = [color_quality(x) for x in df['% качества']]
-    fig_q, ax_q = plt.subplots(figsize=(6,4))
-    bars = ax_q.bar(df['Работа'], df['% качества'], color=colors_q)
-    ax_q.set_ylabel('% качества')
-    ax_q.set_ylim(0,100)
-    for bar, val in zip(bars, df['% качества']):
-        ax_q.text(bar.get_x()+bar.get_width()/2, val+1, f"{val:.0f}%", ha='center')
-    st.pyplot(fig_q)
+    if '% качества' in df.columns:
+        colors_q = [color_quality(x) for x in df['% качества']]
+        fig_q, ax_q = plt.subplots(figsize=(6,4))
+        bars = ax_q.bar(df['Работа'], df['% качества'], color=colors_q)
+        ax_q.set_ylabel('% качества')
+        ax_q.set_ylim(0,100)
+        for bar, val in zip(bars, df['% качества']):
+            ax_q.text(bar.get_x()+bar.get_width()/2, val+1, f"{val:.0f}%", ha='center')
+        st.pyplot(fig_q)
 
-    # --- 5. Цветная диаграмма успеваемости ---
+    # --- 5. Диаграмма успеваемости ---
     st.subheader("📈 Процент успеваемости (цветная)")
 
     def color_pass(x):
@@ -67,56 +70,54 @@ if uploaded:
         else:
             return '#d62728'
 
-    colors_p = [color_pass(x) for x in df['% успеваемости']]
-    fig_p, ax_p = plt.subplots(figsize=(6,4))
-    bars2 = ax_p.bar(df['Работа'], df['% успеваемости'], color=colors_p)
-    ax_p.set_ylabel('% успеваемости')
-    ax_p.set_ylim(0,100)
-    for bar, val in zip(bars2, df['% успеваемости']):
-        ax_p.text(bar.get_x()+bar.get_width()/2, val+1, f"{val:.0f}%", ha='center')
-    st.pyplot(fig_p)
+    if '% успеваемости' in df.columns:
+        colors_p = [color_pass(x) for x in df['% успеваемости']]
+        fig_p, ax_p = plt.subplots(figsize=(6,4))
+        bars2 = ax_p.bar(df['Работа'], df['% успеваемости'], color=colors_p)
+        ax_p.set_ylabel('% успеваемости')
+        ax_p.set_ylim(0,100)
+        for bar, val in zip(bars2, df['% успеваемости']):
+            ax_p.text(bar.get_x()+bar.get_width()/2, val+1, f"{val:.0f}%", ha='center')
+        st.pyplot(fig_p)
 
-    # --- 6. Продвинутый анализ ошибок ---
+    # --- 6. AI-диагностика ---
     st.subheader("🔍 AI-диагностика проблемных тем")
     analysis = []
     for _, row in df.iterrows():
         work = str(row['Работа'])
-        q = float(row['% качества'])
+        q = float(row['% качества']) if '% качества' in df.columns else 0
         if q < 70:
-            analysis.append(f"❗ {work}: низкое качество ({q:.0f}%). Требуется повторение и дополнительная диагностика.")
+            analysis.append(f"❗ {work}: низкое качество ({q:.0f}%). Требуется повторение.")
         elif q < 85:
-            analysis.append(f"⚠️ {work}: средние результаты ({q:.0f}%). Рекомендуется дополнительная работа по трудным заданиям.")
+            analysis.append(f"⚠️ {work}: средние результаты ({q:.0f}%). Рекомендуется дополнительная работа.")
         else:
             analysis.append(f"✅ {work}: высокий уровень ({q:.0f}%).")
 
     st.write("<br>".join(analysis), unsafe_allow_html=True)
 
-    # --- 7. Ученики по уровням (если есть) ---
+    # --- 7. Ученики по уровням ---
     students_by_level = {}
-    header_idx = None
     for i, row in df_raw.iterrows():
         row_text = ' '.join([str(x) for x in row.astype(str).values])
         if 'Низкий' in row_text or 'Средний' in row_text or 'Высокий' in row_text:
-            header_idx = i
             header_row = row
+            for col_idx, val in header_row.items():
+                if isinstance(val, str) and ('Низкий' in val or 'Средний' in val or 'Высокий' in val):
+                    key = val.strip()
+                    names = []
+                    for c in range(col_idx+1, col_idx+4):
+                        if c in header_row.index:
+                            names.append(str(header_row[c]))
+                    names_text = ', '.join([x for x in names if x and x not in ['nan','None']])
+                    students_by_level[key] = names_text
             break
-    if header_idx is not None:
-        for col_idx, val in header_row.items():
-            if isinstance(val, str) and ('Низкий' in val or 'Средний' in val or 'Высокий' in val):
-                key = val.strip()
-                names = []
-                for c in range(col_idx+1, col_idx+4):
-                    if c in header_row.index:
-                        names.append(str(header_row[c]))
-                names_text = ', '.join([x for x in names if x and x!='nan' and x!='None' and x.strip()!=''])
-                students_by_level[key] = names_text
 
     if students_by_level:
-        st.subheader('👥 Ученики по уровням (если найдены в файле)')
+        st.subheader('👥 Ученики по уровням')
         for k,v in students_by_level.items():
             st.write(f"**{k}**: {v}")
 
-    # --- 8. Генерация PDF-отчёта ---
+    # --- 8. Генерация PDF ---
     st.subheader('📥 Скачать PDF-отчёт')
 
     def create_pdf(df_table, fig_quality, fig_pass, analysis_lines, students_dict):
@@ -131,18 +132,14 @@ if uploaded:
         # Таблица
         p.setFont('Helvetica', 10)
         y = height - 70
-        p.drawString(40, y, 'Работа')
-        p.drawString(200, y, 'Выполнили')
-        p.drawString(280, y, 'Не выполнили')
-        p.drawString(360, y, '% качества')
-        p.drawString(460, y, '% успеваемости')
+        for col_name in df_table.columns:
+            p.drawString(40 + df_table.columns.get_loc(col_name)*80, y, col_name)
         y -= 15
         for _, r in df_table.iterrows():
-            p.drawString(40, y, str(r['Работа']))
-            p.drawString(200, y, str(int(r['Выполнили'])))
-            p.drawString(280, y, str(int(r['Не выполнили'])))
-            p.drawString(360, y, f"{int(r['% качества'])}%")
-            p.drawString(460, y, f"{int(r['% успеваемости'])}%")
+            for col_name in df_table.columns:
+                val = r[col_name]
+                display_val = f"{int(val)}%" if '%' in col_name else str(int(val))
+                p.drawString(40 + df_table.columns.get_loc(col_name)*80, y, display_val)
             y -= 15
             if y < 150:
                 p.showPage()
@@ -176,7 +173,7 @@ if uploaded:
                 p.showPage()
                 y = height - 40
 
-        # Ученики по уровням
+        # Ученики
         if students_dict:
             p.showPage()
             p.setFont('Helvetica-Bold', 12)
@@ -199,4 +196,3 @@ if uploaded:
         st.download_button('Скачать PDF', data=pdf_bytes, file_name='report_SOR_SOCH.pdf', mime='application/pdf')
 
     st.info("Готово! PDF формируется кнопкой выше.")
-
