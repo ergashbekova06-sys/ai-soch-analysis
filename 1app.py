@@ -36,11 +36,6 @@ if uploaded:
 desired = [c for c in [0,1,2,7,8] if c in cols_available]
 df = df[desired]
 df.columns = ["Работа","Выполнили","Не выполнили","% качества","% успеваемости"][:len(desired)]
-
-
-    df = df[desired]
-    df.columns = ["Работа","Выполнили","Не выполнили","% качества","% успеваемости"]
-
     # Приведём числовые колонки к числам
     for col in ["Выполнили","Не выполнили","% качества","% успеваемости"]:
         df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
