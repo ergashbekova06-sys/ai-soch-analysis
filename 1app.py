@@ -33,6 +33,10 @@ if uploaded:
             desired.append(c)
         else:
             desired.append(cols_available[min(len(cols_available)-1, c)])
+desired = [c for c in [0,1,2,7,8] if c in cols_available]
+df = df[desired]
+df.columns = ["Работа","Выполнили","Не выполнили","% качества","% успеваемости"][:len(desired)]
+
 
     df = df[desired]
     df.columns = ["Работа","Выполнили","Не выполнили","% качества","% успеваемости"]
